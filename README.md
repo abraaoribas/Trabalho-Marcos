@@ -8,7 +8,7 @@ O objetivo do jogador é percorrer a maior distância possível, desviando dos o
 
 <!aqui>
 
-![Tela principal do Pixel Rush](assets/screenshot.png)
+![Tela principal do Pixel Rush](assets/menu.png)
 
 ## Integrantes
 
