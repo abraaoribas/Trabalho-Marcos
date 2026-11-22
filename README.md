@@ -13,7 +13,7 @@ O objetivo do jogador é percorrer a maior distância possível, desviando dos o
 ## Integrantes
 
 - **Rafael Cauã Iank** — R.A.: 26014423
-- **Abraão de Jesus Ribas** — R.A.:
+- **Abraão de Jesus Ribas** — R.A.: 26000123
 
 ## Como Jogar
 
