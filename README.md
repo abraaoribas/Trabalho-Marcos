@@ -6,10 +6,7 @@ O objetivo do jogador é percorrer a maior distância possível, desviando dos o
 
 ## Captura de Tela
 
-<!aqui>
-
 ![Tela principal do Pixel Rush](assets/menu.jpeg)
-
 ## Integrantes
 
 - **Rafael Cauã Iank** — R.A.: 26014423
