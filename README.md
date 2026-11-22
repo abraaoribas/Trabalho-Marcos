@@ -31,7 +31,15 @@ O jogador deve controlar seu veículo para desviar dos obstáculos que aparecem 
 
 ## Instalação e Execução
 
-<!adicionar>
+Para baixar e jogar o Pixel Rush, siga os passos abaixo:
+
+1. Acesse a seção **Releases** deste repositório.
+2. Baixe o arquivo ZIP do jogo.
+3. Extraia o conteúdo do ZIP em uma pasta do computador.
+4. Abra a pasta extraída e execute o arquivo `PixelRush.exe`.
+5. O jogo será iniciado e estará pronto para jogar.
+
+**Observação:** mantenha os arquivos e pastas extraídos juntos para garantir o funcionamento correto do jogo.
 
 
 ## Tecnologias Utilizadas
