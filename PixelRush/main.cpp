@@ -1,1 +1,767 @@
 
+#include "raylib.h"
+#include <stdio.h>
+
+// Elementos do cenário
+struct ObjetoCenario
+{
+    float x;
+    float y;
+    float largura;
+    float altura;
+    int tipo;
+};
+
+// Inicializa o cenário
+void InicializarCenario(ObjetoCenario cenario[])
+{
+    float posicoesX[] = {10, 105, 615, 695};
+
+    for (int coluna = 0; coluna < 4; coluna++)
+    {
+        for (int linha = 0; linha < 3; linha++)
+        {
+            int i = coluna * 3 + linha;
+
+            cenario[i].x = posicoesX[coluna];
+            cenario[i].y = -linha * 150.0f - coluna * 70.0f;
+
+            // Alterna entre árvores e arbustos
+            cenario[i].tipo = (linha + coluna) % 2;
+
+            if (cenario[i].tipo == 0)
+            {
+                cenario[i].largura = 90;
+                cenario[i].altura = 90;
+            }
+            else
+            {
+                cenario[i].largura = 75;
+                cenario[i].altura = 65;
+            }
+        }
+    }
+}
+
+// Atualiza o movimento do cenário
+void AtualizarCenario(ObjetoCenario cenario[], float velocidade, float dt)
+{
+    for (int i = 0; i < 12; i++)
+    {
+        cenario[i].y += velocidade * dt;
+
+        if (cenario[i].y > 450)
+        {
+            cenario[i].y -= 600;
+        }
+    }
+}
+
+// Desenha o cenário
+void DesenharCenario(ObjetoCenario cenario[], Texture2D arvore, Texture2D arbusto)
+{
+    for (int i = 0; i < 12; i++)
+    {
+        Texture2D imagem;
+
+        if (cenario[i].tipo == 0)
+            imagem = arvore;
+        else
+            imagem = arbusto;
+
+        Rectangle origem = {
+            0,
+            0,
+            (float)imagem.width,
+            (float)imagem.height
+        };
+
+        Rectangle destino = {
+            cenario[i].x,
+            cenario[i].y,
+            cenario[i].largura,
+            cenario[i].altura
+        };
+
+        DrawTexturePro(
+            imagem,
+            origem,
+            destino,
+            {0, 0},
+            0.0f,
+            WHITE
+        );
+    }
+}
+
+float SortearPosicaoObstaculo(float largura, int pistaX, int pistaLargura, float xAnterior)
+{
+    int minimo = pistaX + 10;
+    int maximo = pistaX + pistaLargura - (int)largura - 10;
+
+    int novoX;
+    int tentativas = 0;
+
+    do
+    {
+        novoX = GetRandomValue(minimo, maximo);
+        tentativas++;
+
+    } while (
+        xAnterior >= 0 &&
+        novoX >= xAnterior - 70 &&
+        novoX <= xAnterior + 70 &&
+        tentativas < 20
+    );
+
+    return (float)novoX;
+}
+
+// Inicialização dos obstáculos
+void InicializarObstaculos(Rectangle obstaculos[], int tipoObstaculo[],
+    float larguras[], float alturas[], int quantidade, int pistaX, int pistaLargura)
+{
+    for (int i = 0; i < quantidade; i++)
+    {
+        tipoObstaculo[i] = GetRandomValue(0, 3);
+
+        obstaculos[i].width = larguras[tipoObstaculo[i]];
+        obstaculos[i].height = alturas[tipoObstaculo[i]];
+
+        obstaculos[i].x = SortearPosicaoObstaculo(
+            obstaculos[i].width,
+            pistaX,
+            pistaLargura,
+            -1
+        );
+
+        if (i == 0)
+        {
+            obstaculos[i].y = -GetRandomValue(150, 300);
+        }
+        else
+        {
+            obstaculos[i].y = obstaculos[i - 1].y - GetRandomValue(180, 320);
+        }
+    }
+}
+
+// Botão da interface
+bool DesenharBotao(Rectangle botao, const char *texto)
+{
+    Vector2 mouse = GetMousePosition();
+
+    bool sobreBotao = CheckCollisionPointRec(mouse, botao);
+
+    Color cor = sobreBotao ? ORANGE : DARKBLUE;
+
+    DrawRectangleRounded(botao, 0.25f, 10, cor);
+    DrawRectangleRoundedLines(botao, 0.25f, 10, WHITE);
+
+    int larguraTexto = MeasureText(texto, 25);
+
+    DrawText(
+        texto,
+        botao.x + (botao.width - larguraTexto) / 2,
+        botao.y + (botao.height - 25) / 2,
+        25,
+        WHITE
+    );
+
+    return sobreBotao && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+}
+
+// Reinicia a partida
+void ReiniciarJogo(
+    Vector2 &ballPosition,
+    float &velocidade,
+    float &movimentoPista,
+    float &velocidadeObstaculo,
+    float &tempoSobrevivido,
+    float &metrosPercorridos,
+    float &tempoExplosao,
+    int &quadroExplosao,
+    bool &explosaoAtiva,
+    bool &gameOver,
+    Rectangle obstaculos[],
+    int tipoObstaculo[],
+    float larguras[],
+    float alturas[],
+    int quantidade,
+    int pistaX,
+    int pistaLargura
+)
+{
+    ballPosition = {400, 300};
+
+    velocidade = 250.0f;
+    velocidadeObstaculo = 250.0f;
+
+    movimentoPista = 0.0f;
+
+    tempoSobrevivido = 0.0f;
+    metrosPercorridos = 0.0f;
+
+    tempoExplosao = 0.0f;
+    quadroExplosao = 0;
+
+    explosaoAtiva = false;
+    gameOver = false;
+
+    InicializarObstaculos(
+        obstaculos,
+        tipoObstaculo,
+        larguras,
+        alturas,
+        quantidade,
+        pistaX,
+        pistaLargura
+    );
+}
+
+enum EstadoJogo
+{
+    MENU,
+    JOGANDO,
+    GAME_OVER
+};
+
+int main()
+{
+    const int screenWidth = 800;
+    const int screenHeight = 450;
+
+    InitWindow(screenWidth, screenHeight, "Pixel Rush");
+    SetRandomSeed((unsigned int)(GetTime() * 1000000.0));
+
+    // Imagem do menu inicial
+    Texture2D logoMenu = LoadTexture("assets/menu/logo.png");
+
+    Texture2D carro = LoadTexture("assets/carros/mytire15.png");
+    Texture2D cone = LoadTexture("assets/obstaculos/cones.png");
+    Texture2D placa = LoadTexture("assets/obstaculos/placa.png");
+    Texture2D oleo = LoadTexture("assets/obstaculos/oleo.png");
+    Texture2D pneus = LoadTexture("assets/obstaculos/pneus.png");
+
+    // Carregamento do cenário
+    Texture2D arvore = LoadTexture("assets/cenario/arvore.png");
+    Texture2D arbusto = LoadTexture("assets/cenario/arbusto.png");
+
+    ObjetoCenario cenario[12];
+
+    InicializarCenario(cenario);
+
+    // Animação da explosão
+    Texture2D explosao = LoadTexture("assets/explosao/explosao.png");
+
+    const int colunasExplosao = 4;
+    const int linhasExplosao = 4;
+    const int totalQuadrosExplosao = 16;
+
+    const float duracaoQuadroExplosao = 0.07f;
+
+    float tempoExplosao = 0.0f;
+    int quadroExplosao = 0;
+
+    bool explosaoAtiva = false;
+    Vector2 posicaoExplosao = {0, 0};
+
+    Texture2D imagensObstaculos[] = {cone, placa, oleo, pneus};
+
+    Vector2 ballPosition = {400, 300};
+
+    // Configurações de velocidade
+    float velocidade = 250.0f;
+    float aceleracao = 10.0f;
+    float velocidadeMaxima = 30000.0f;
+
+    // Sistema de pontuação
+    float tempoSobrevivido = 0.0f;
+    float metrosPercorridos = 0.0f;
+
+    // Recorde
+    float recordeTempo = 0.0f;
+
+    FILE *arquivoRecorde = fopen("recorde.txt", "r");
+
+    if (arquivoRecorde != NULL)
+    {
+        fscanf(arquivoRecorde, "%f", &recordeTempo);
+        fclose(arquivoRecorde);
+    }
+
+    float movimentoPista = 0.0f;
+
+    const int alturaFaixaLateral = 40;
+
+    const int pistaX = 200;
+    const int pistaLargura = 400;
+
+    // Configurações dos obstáculos
+    const int quantidadeObstaculos = 3;
+    Rectangle obstaculos[3];
+    int tipoObstaculo[3];
+
+    float velocidadeObstaculo = 250.0f;
+
+    bool gameOver = false;
+
+    float largurasObstaculos[] = {50, 80, 90, 70};
+    float alturasObstaculos[] = {70, 59, 58, 70};
+
+    InicializarObstaculos(
+        obstaculos,
+        tipoObstaculo,
+        largurasObstaculos,
+        alturasObstaculos,
+        quantidadeObstaculos,
+        pistaX,
+        pistaLargura
+    );
+
+    EstadoJogo estadoAtual = MENU;
+
+    SetTargetFPS(60);
+
+    while (!WindowShouldClose())
+    {
+        float dt = GetFrameTime();
+
+        if (estadoAtual == JOGANDO && !gameOver && !explosaoAtiva)
+        {
+            // Atualização da pontuação
+            tempoSobrevivido += dt;
+            metrosPercorridos += (velocidade * dt) / 10.0f;
+
+            // Aceleração gradual do jogo
+            if (velocidade < velocidadeMaxima)
+            {
+                velocidade += aceleracao * dt;
+
+                if (velocidade > velocidadeMaxima)
+                    velocidade = velocidadeMaxima;
+            }
+
+            velocidadeObstaculo = velocidade;
+
+            // Atualização do cenário
+            AtualizarCenario(cenario, velocidade, dt);
+
+            // Movimentação do carro
+            if (IsKeyDown(KEY_D))
+                ballPosition.x += 250.0f * dt;
+
+            if (IsKeyDown(KEY_A))
+                ballPosition.x -= 250.0f * dt;
+
+            if (ballPosition.x < pistaX + 20)
+                ballPosition.x = pistaX + 20;
+
+            if (ballPosition.x > pistaX + pistaLargura - 20)
+                ballPosition.x = pistaX + pistaLargura - 20;
+
+            if (ballPosition.y < 20)
+                ballPosition.y = 20;
+
+            if (ballPosition.y > screenHeight - 20)
+                ballPosition.y = screenHeight - 20;
+
+            // Movimento da pista
+            movimentoPista += velocidade * dt;
+
+            if (movimentoPista >= 80)
+                movimentoPista -= 80;
+
+            // Movimento dos obstáculos
+            for (int i = 0; i < quantidadeObstaculos; i++)
+            {
+                obstaculos[i].y += velocidadeObstaculo * dt;
+
+                if (obstaculos[i].y > screenHeight)
+                {
+                    float xAnterior = obstaculos[i].x;
+
+                    tipoObstaculo[i] = GetRandomValue(0, 3);
+
+                    obstaculos[i].width = largurasObstaculos[tipoObstaculo[i]];
+                    obstaculos[i].height = alturasObstaculos[tipoObstaculo[i]];
+
+                    obstaculos[i].x = SortearPosicaoObstaculo(
+                        obstaculos[i].width,
+                        pistaX,
+                        pistaLargura,
+                        xAnterior
+                    );
+
+                    // Procura o obstáculo que está mais acima
+                    float topo = 0;
+
+                    for (int j = 0; j < quantidadeObstaculos; j++)
+                    {
+                        if (j != i && obstaculos[j].y < topo)
+                            topo = obstaculos[j].y;
+                    }
+
+                    // Define uma distância aleatória para o próximo obstáculo
+                    obstaculos[i].y = topo - GetRandomValue(180, 320);
+                }
+            }
+
+            // Verificação de colisão
+            Rectangle hitboxColisao = {
+                ballPosition.x + 12,
+                ballPosition.y + 15,
+                36,
+                75
+            };
+
+            for (int i = 0; i < quantidadeObstaculos; i++)
+            {
+                float margemX = obstaculos[i].width * 0.15f;
+                float margemY = obstaculos[i].height * 0.15f;
+
+                Rectangle hitboxObstaculo = {
+                    obstaculos[i].x + margemX,
+                    obstaculos[i].y + margemY,
+                    obstaculos[i].width - (margemX * 2),
+                    obstaculos[i].height - (margemY * 2)
+                };
+
+                if (CheckCollisionRecs(hitboxColisao, hitboxObstaculo))
+                {
+                    // Inicia a animação da explosão
+                    explosaoAtiva = true;
+                    tempoExplosao = 0.0f;
+                    quadroExplosao = 0;
+
+                    posicaoExplosao.x = ballPosition.x + 30;
+                    posicaoExplosao.y = ballPosition.y + 52.5f;
+
+                    break;
+                }
+            }
+        }
+
+        // Atualização da animação da explosão
+        if (estadoAtual == JOGANDO && explosaoAtiva)
+        {
+            tempoExplosao += dt;
+
+            quadroExplosao = (int)(tempoExplosao / duracaoQuadroExplosao);
+
+            if (quadroExplosao >= totalQuadrosExplosao)
+            {
+                explosaoAtiva = false;
+                gameOver = true;
+                estadoAtual = GAME_OVER;
+
+                // Atualiza o recorde se necessário
+                if (tempoSobrevivido > recordeTempo)
+                {
+                    recordeTempo = tempoSobrevivido;
+
+                    FILE *arquivo = fopen("recorde.txt", "w");
+
+                    if (arquivo != NULL)
+                    {
+                        fprintf(arquivo, "%.2f", recordeTempo);
+                        fclose(arquivo);
+                    }
+                }
+            }
+        }
+
+        BeginDrawing();
+
+        ClearBackground(DARKGREEN);
+
+        if (estadoAtual == MENU)
+        {
+            // Imagem da logo como fundo
+            if (logoMenu.id != 0)
+            {
+                DrawTexturePro(
+                    logoMenu,
+                    {0, 0, (float)logoMenu.width, (float)logoMenu.height},
+                    {0, 0, (float)screenWidth, (float)screenHeight},
+                    {0, 0},
+                    0.0f,
+                    WHITE
+                );
+            }
+            else
+            {
+                DrawText("PIXEL RUSH", 270, 100, 50, WHITE);
+            }
+
+            // Botão iniciar
+            Rectangle botaoIniciar = {300, 365, 200, 60};
+
+            if (DesenharBotao(botaoIniciar, "INICIAR"))
+            {
+                ReiniciarJogo(
+                    ballPosition,
+                    velocidade,
+                    movimentoPista,
+                    velocidadeObstaculo,
+                    tempoSobrevivido,
+                    metrosPercorridos,
+                    tempoExplosao,
+                    quadroExplosao,
+                    explosaoAtiva,
+                    gameOver,
+                    obstaculos,
+                    tipoObstaculo,
+                    largurasObstaculos,
+                    alturasObstaculos,
+                    quantidadeObstaculos,
+                    pistaX,
+                    pistaLargura
+                );
+
+                InicializarCenario(cenario);
+
+                estadoAtual = JOGANDO;
+            }
+        }
+
+        else if (estadoAtual == JOGANDO || estadoAtual == GAME_OVER)
+        {
+            // Desenho do cenário lateral
+            DesenharCenario(cenario, arvore, arbusto);
+
+            // Pista
+            DrawRectangle(pistaX, 0, pistaLargura, screenHeight, DARKGRAY);
+
+            // Faixas laterais alternadas em vermelho e branco
+            for (int y = -alturaFaixaLateral; y < screenHeight; y += alturaFaixaLateral)
+            {
+                int posY = y + (int)movimentoPista;
+
+                Color cor = ((y / alturaFaixaLateral) % 2 == 0) ? RED : WHITE;
+
+                DrawRectangle(pistaX, posY, 10, alturaFaixaLateral, cor);
+                DrawRectangle(
+                    pistaX + pistaLargura - 10,
+                    posY,
+                    10,
+                    alturaFaixaLateral,
+                    cor
+                );
+            }
+
+            // Linhas divisórias da pista
+            for (int y = -80; y < screenHeight; y += 80)
+            {
+                DrawRectangle(330, y + (int)movimentoPista, 6, 40, RAYWHITE);
+                DrawRectangle(465, y + (int)movimentoPista, 6, 40, RAYWHITE);
+            }
+
+            // Desenho dos obstáculos
+            for (int i = 0; i < quantidadeObstaculos; i++)
+            {
+                Rectangle origem;
+
+                if (tipoObstaculo[i] == 0)
+                {
+                    origem = (Rectangle){
+                        (float)cone.width * 2 / 3,
+                        (float)cone.height / 2,
+                        (float)cone.width / 3,
+                        (float)cone.height / 2
+                    };
+                }
+                else if (tipoObstaculo[i] == 1)
+                {
+                    origem = (Rectangle){167, 30, 1331, 968};
+                }
+                else if (tipoObstaculo[i] == 2)
+                {
+                    origem = (Rectangle){97, 63, 1387, 937};
+                }
+                else
+                {
+                    origem = (Rectangle){0, 0, 32, 32};
+                }
+
+                DrawTexturePro(
+                    imagensObstaculos[tipoObstaculo[i]],
+                    origem,
+                    obstaculos[i],
+                    {0, 0},
+                    0.0f,
+                    WHITE
+                );
+            }
+
+            // Carro do jogador
+            float larguraCarro = 60;
+            float alturaCarro = 105;
+
+            Rectangle hitboxCarro = {
+                ballPosition.x,
+                ballPosition.y,
+                larguraCarro,
+                alturaCarro
+            };
+
+            // Desenha o carro somente enquanto não houver explosão
+            if (!explosaoAtiva)
+            {
+                DrawTexturePro(
+                    carro,
+                    {0, 0, (float)carro.width / 4, (float)carro.height},
+                    hitboxCarro,
+                    {0, 0},
+                    0.0f,
+                    WHITE
+                );
+            }
+
+            // Desenho da explosão
+            if (explosaoAtiva)
+            {
+                float larguraQuadro = (float)explosao.width / colunasExplosao;
+                float alturaQuadro = (float)explosao.height / linhasExplosao;
+
+                int coluna = quadroExplosao % colunasExplosao;
+                int linha = quadroExplosao / colunasExplosao;
+
+                Rectangle origemExplosao = {
+                    coluna * larguraQuadro,
+                    linha * alturaQuadro,
+                    larguraQuadro,
+                    alturaQuadro
+                };
+
+                Rectangle destinoExplosao = {
+                    posicaoExplosao.x - 90,
+                    posicaoExplosao.y - 90,
+                    180,
+                    180
+                };
+
+                DrawTexturePro(
+                    explosao,
+                    origemExplosao,
+                    destinoExplosao,
+                    {0, 0},
+                    0.0f,
+                    WHITE
+                );
+            }
+
+            DrawText("PIXEL RUSH", 10, 10, 25, WHITE);
+
+            // Pontuação
+            DrawText(TextFormat("TEMPO: %.1f s", tempoSobrevivido), 10, 45, 20, WHITE);
+            DrawText(TextFormat("DISTANCIA: %.0f m", metrosPercorridos), 10, 70, 20, WHITE);
+
+            if (estadoAtual == GAME_OVER)
+            {
+                DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.8f));
+
+                // Título centralizado
+                const char *titulo = "GAME OVER";
+                DrawText(
+                    titulo,
+                    (screenWidth - MeasureText(titulo, 45)) / 2,
+                    65,
+                    45,
+                    RED
+                );
+
+                // Mensagem centralizada
+                const char *mensagem = "VOCE PERDEU!";
+                DrawText(
+                    mensagem,
+                    (screenWidth - MeasureText(mensagem, 20)) / 2,
+                    125,
+                    20,
+                    WHITE
+                );
+
+                // Tempo
+                const char *textoTempo = TextFormat("TEMPO: %.1f SEGUNDOS", tempoSobrevivido);
+                DrawText(
+                    textoTempo,
+                    (screenWidth - MeasureText(textoTempo, 22)) / 2,
+                    180,
+                    22,
+                    WHITE
+                );
+
+                // Distância
+                const char *textoDistancia = TextFormat("DISTANCIA: %.0f METROS", metrosPercorridos);
+                DrawText(
+                    textoDistancia,
+                    (screenWidth - MeasureText(textoDistancia, 22)) / 2,
+                    215,
+                    22,
+                    WHITE
+                );
+
+                // Recorde
+                const char *textoRecorde = TextFormat("RECORDE: %.1f SEGUNDOS", recordeTempo);
+                DrawText(
+                    textoRecorde,
+                    (screenWidth - MeasureText(textoRecorde, 22)) / 2,
+                    250,
+                    22,
+                    GOLD
+                );
+
+                // Botão recomeçar
+                Rectangle botaoRecomecar = {300, 305, 200, 65};
+
+                if (DesenharBotao(botaoRecomecar, "RECOMECAR"))
+                {
+                    ReiniciarJogo(
+                        ballPosition,
+                        velocidade,
+                        movimentoPista,
+                        velocidadeObstaculo,
+                        tempoSobrevivido,
+                        metrosPercorridos,
+                        tempoExplosao,
+                        quadroExplosao,
+                        explosaoAtiva,
+                        gameOver,
+                        obstaculos,
+                        tipoObstaculo,
+                        largurasObstaculos,
+                        alturasObstaculos,
+                        quantidadeObstaculos,
+                        pistaX,
+                        pistaLargura
+                    );
+
+                    InicializarCenario(cenario);
+
+                    estadoAtual = JOGANDO;
+                }
+            }
+        }
+
+        EndDrawing();
+    }
+
+    // Liberação da imagem do menu
+    UnloadTexture(logoMenu);
+
+    UnloadTexture(carro);
+    UnloadTexture(cone);
+    UnloadTexture(placa);
+    UnloadTexture(oleo);
+    UnloadTexture(pneus);
+    UnloadTexture(explosao);
+
+    // Liberação das texturas do cenário
+    UnloadTexture(arvore);
+    UnloadTexture(arbusto);
+
+    CloseWindow();
+
+    return 0;
+}
+
